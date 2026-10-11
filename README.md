@@ -95,6 +95,12 @@ jobs:
 previous stage. Approvals are not part of the YAML: they are configured on the GitHub
 environments (Settings, Environments, Required reviewers).
 
+The environments `dev`, `staging` and `production` must exist in the application
+repository before its first push to `main`. The section "Repository setup" in
+[hello-java-pipeline](https://github.com/christianlehnert/hello-java-pipeline#repository-setup)
+shows how to create them with the GitHub CLI, including a required reviewer and a branch
+restriction for `production`.
+
 ## Inputs and permissions
 
 ### build-java
