@@ -1,5 +1,5 @@
 # Minimal web server used by the selftest to exercise the composite actions.
-FROM busybox:1.37
+FROM busybox:1.38
 
 RUN mkdir -p /www \
  && echo "UP" > /www/health \
