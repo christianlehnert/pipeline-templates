@@ -1,0 +1,45 @@
+name: smoke-test
+description: >-
+  Start a container image and wait until its HTTP health endpoint returns status 200.
+  Prints the container logs if the check fails and always removes the container.
+
+inputs:
+  image:
+    description: Image reference, either a local tag or a registry reference with digest.
+    required: true
+  port:
+    description: Port the application listens on inside the container.
+    required: false
+    default: "8080"
+  path:
+    description: Health endpoint path.
+    required: false
+    default: /health
+  timeout-seconds:
+    description: How long to wait for the health endpoint.
+    required: false
+    default: "60"
+  registry-token:
+    description: Token used to pull from ghcr.io. Needs the packages read permission.
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Log in to GitHub Container Registry
+      if: startsWith(inputs.image, 'ghcr.io/') && contains(inputs.image, '@')
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ inputs.registry-token }}
+
+    - name: Start container and check health
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        PORT: ${{ inputs.port }}
+        HEALTH_PATH: ${{ inputs.path }}
+        TIMEOUT: ${{ inputs.timeout-seconds }}
+      run: bash "$GITHUB_ACTION_PATH/smoke-test.sh"

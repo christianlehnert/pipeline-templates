@@ -1,0 +1,71 @@
+name: deploy
+
+# Reusable workflow: deploy one image to one environment.
+#
+# The job runs in the given GitHub environment, so protection rules configured there
+# (for example required reviewers on "production") apply before it starts. Only one
+# deployment per application and environment runs at a time.
+#
+# The deploy step is a placeholder that verifies the image and records the deployment.
+# Replace it with your platform, for example Azure Container Apps with an OIDC login.
+# The calling job must grant: contents: read, packages: read.
+
+on:
+  workflow_call:
+    inputs:
+      app:
+        description: Application name.
+        type: string
+        required: true
+      environment:
+        description: GitHub environment name, for example dev, staging or production.
+        type: string
+        required: true
+      image:
+        description: Image reference with digest, as produced by a build workflow.
+        type: string
+        required: true
+      port:
+        description: Port the application listens on inside the container.
+        type: string
+        required: false
+        default: "8080"
+      health-path:
+        description: Health endpoint used for the smoke test.
+        type: string
+        required: false
+        default: /health
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: ${{ inputs.environment }}
+    concurrency:
+      group: deploy-${{ inputs.app }}-${{ inputs.environment }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Verify that the image starts and is healthy
+        uses: christianlehnert/pipeline-templates/actions/smoke-test@v1
+        with:
+          image: ${{ inputs.image }}
+          port: ${{ inputs.port }}
+          path: ${{ inputs.health-path }}
+
+      - name: Deploy (placeholder)
+        env:
+          APP: ${{ inputs.app }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          IMAGE: ${{ inputs.image }}
+        run: |
+          echo "Deploying ${IMAGE} as ${APP} to ${ENVIRONMENT}."
+          {
+            echo "### ${APP} deployed to ${ENVIRONMENT}"
+            echo ""
+            echo "Image: \`${IMAGE}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

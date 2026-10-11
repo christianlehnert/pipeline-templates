@@ -1,0 +1,17 @@
+# actionlint binary downloaded by the selftest
+/actionlint
+
+# act: local secrets and variables
+.secrets
+*.secrets
+.env
+.vars
+
+# editors and operating systems
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# logs
+*.log

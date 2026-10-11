@@ -1,0 +1,94 @@
+name: build-dotnet
+
+# Reusable workflow: build and test a .NET solution, publish one project, build the
+# container image, smoke-test it and optionally push it to GitHub Container Registry.
+# The Dockerfile is expected to copy the folder "publish/" into the image.
+# The calling job must grant: contents: read, packages: write.
+
+on:
+  workflow_call:
+    inputs:
+      app:
+        description: Image name. Lowercase letters, digits and dashes.
+        type: string
+        required: true
+      project:
+        description: Path to the project to publish, relative to working-directory.
+        type: string
+        required: true
+      dotnet-version:
+        description: .NET SDK version for actions/setup-dotnet.
+        type: string
+        required: false
+        default: "10.0.x"
+      working-directory:
+        description: Directory that contains the solution and the Dockerfile.
+        type: string
+        required: false
+        default: "."
+      push:
+        description: Push the image to ghcr.io. Set to true on the main branch only.
+        type: boolean
+        required: false
+        default: false
+      port:
+        description: Port the application listens on inside the container.
+        type: string
+        required: false
+        default: "8080"
+      health-path:
+        description: Health endpoint used for the smoke test.
+        type: string
+        required: false
+        default: /health
+    outputs:
+      image:
+        description: Image reference. With push it is ghcr.io/OWNER/APP@sha256:DIGEST.
+        value: ${{ jobs.build.outputs.image }}
+
+jobs:
+  build:
+    name: Build, test and package
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.publish.outputs.image }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Build and run tests
+        run: dotnet test --configuration Release
+
+      - name: Publish application
+        env:
+          PROJECT: ${{ inputs.project }}
+        run: dotnet publish "$PROJECT" --configuration Release --output publish
+
+      - name: Build container image
+        id: publish
+        uses: christianlehnert/pipeline-templates/actions/container-publish@v1
+        with:
+          app: ${{ inputs.app }}
+          context: ${{ inputs.working-directory }}
+          push: ${{ inputs.push }}
+
+      - name: Smoke test
+        uses: christianlehnert/pipeline-templates/actions/smoke-test@v1
+        with:
+          image: ${{ steps.publish.outputs.image }}
+          port: ${{ inputs.port }}
+          path: ${{ inputs.health-path }}

@@ -1,0 +1,33 @@
+name: release
+
+# When a version tag such as v1.2.3 is pushed, move the major tag (v1) to the same
+# commit. Applications that reference @v1 then receive the release automatically.
+# Breaking changes get a new major version (v2) instead.
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: read
+
+jobs:
+  move-major-tag:
+    name: Move major version tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Move major tag to this release
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          major="${TAG%%.*}"
+          git tag --force "$major" "$GITHUB_SHA"
+          git push --force origin "refs/tags/${major}"
+          echo "Moved ${major} to ${TAG} (${GITHUB_SHA})."

@@ -1,0 +1,14 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /actions/container-publish
+      - /actions/smoke-test
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /tests/fixtures/web
+    schedule:
+      interval: weekly

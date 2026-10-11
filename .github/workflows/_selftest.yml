@@ -1,0 +1,60 @@
+name: selftest
+
+# Tests this repository itself: lints all workflows and scripts, and runs the composite
+# actions from the working tree (local paths) against a small fixture image.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint workflows and scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run actionlint
+        run: |
+          bash <(curl --silent --show-error --fail --location \
+            https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
+          ./actionlint -color
+
+      - name: Run shellcheck
+        run: shellcheck actions/*/*.sh
+
+  actions:
+    name: Test composite actions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build fixture image (container-publish)
+        id: build
+        uses: ./actions/container-publish
+        with:
+          app: selftest-web
+          context: tests/fixtures/web
+          push: "false"
+
+      - name: Smoke test fixture image (smoke-test)
+        uses: ./actions/smoke-test
+        with:
+          image: ${{ steps.build.outputs.image }}

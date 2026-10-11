@@ -1,0 +1,44 @@
+name: codeql
+
+# Reusable workflow: CodeQL code scanning without a build (build-mode none).
+# Free for public repositories. The calling job must grant:
+# contents: read, security-events: write, actions: read.
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        description: CodeQL language, for example java-kotlin or csharp.
+        type: string
+        required: true
+      build-mode:
+        description: CodeQL build mode. "none" analyses the source without building it.
+        type: string
+        required: false
+        default: none
+
+jobs:
+  analyze:
+    name: CodeQL (${{ inputs.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          languages: ${{ inputs.language }}
+          build-mode: ${{ inputs.build-mode }}
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          category: /language:${{ inputs.language }}
