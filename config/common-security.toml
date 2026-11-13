@@ -7,21 +7,15 @@ useDefault = true
 
 [[rules]]
 id = "iban-ch-li"
-description = "IBAN of Switzerland or Liechtenstein (test IBANs end with TEST)"
-regex = '''\b(?:CH|LI)\d{2}(?: ?[0-9A-Z]{4}){4} ?[0-9A-Z]\b'''
+description = "IBAN of Switzerland or Liechtenstein; only valid check digits count, test IBANs go into the manifest"
+regex = '''(?i)\b(?:CH|LI)\d{2}(?: ?[0-9A-Z]{4}){4} ?[0-9A-Z]\b'''
 keywords = ["ch", "li"]
-[[rules.allowlists]]
-regexTarget = "match"
-regexes = ['''TEST\s*$''']
 
 [[rules]]
 id = "iban-sepa"
-description = "IBAN of a frequent SEPA country (test IBANs end with TEST)"
-regex = '''\b(?:DE|AT|FR|IT|ES|NL|BE|LU|PT|IE|FI|SE|DK|NO|PL|CZ)\d{2}(?: ?[0-9A-Z]{4}){3,6}(?: ?[0-9A-Z]{1,4})?\b'''
+description = "IBAN of a frequent SEPA country; only valid check digits count, test IBANs go into the manifest"
+regex = '''(?i)\b(?:DE|AT|FR|IT|ES|NL|BE|LU|PT|IE|FI|SE|DK|NO|PL|CZ)\d{2}(?: ?[0-9A-Z]{4}){3,6}(?: ?[0-9A-Z]{1,4})?\b'''
 keywords = ["de", "at", "fr", "it", "es", "nl", "be", "lu", "pt", "ie", "fi", "se", "dk", "no", "pl", "cz"]
-[[rules.allowlists]]
-regexTarget = "match"
-regexes = ['''TEST\s*$''']
 
 [[rules]]
 id = "party-iso20022"
