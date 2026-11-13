@@ -183,6 +183,7 @@ only the first run builds it (about one minute).
 |---|---|---|---|
 | `gitleaks-repository` | no | `gitleaks/gitleaks` | Repository to build gitleaks from, for example your fork |
 | `gitleaks-ref` | no | commit of `v8.30.1` | Full 40-character commit SHA to build |
+| `gitleaks-version` | no | `8.30.1` | Version of that commit, used for `minVersion` checks in configs |
 | `runs-on` | no | `ubuntu-latest` | Runner label |
 
 Calling job permissions: `contents: read`.
@@ -195,6 +196,7 @@ Calling job permissions: `contents: read`.
     # with:
     #   gitleaks-repository: my-org/gitleaks                         # your fork
     #   gitleaks-ref: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e       # commit to build
+    #   gitleaks-version: 8.30.1                                     # version of that commit
 ```
 
 Configuration stays in the application repository and is picked up automatically:
