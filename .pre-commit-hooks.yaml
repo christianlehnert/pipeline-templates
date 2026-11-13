@@ -1,0 +1,19 @@
+---
+# Hooks of this repository for the pre-commit framework (https://pre-commit.com).
+# They run the same script and rules as .github/workflows/common-security.yml.
+# Needs gitleaks, jq and sha256sum on the PATH.
+- id: common-security
+  name: common-security (staged files)
+  entry: scripts/common-security-scan.sh staged
+  language: script
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]
+
+- id: common-security-push
+  name: common-security (all tracked files, before push)
+  entry: scripts/common-security-scan.sh tracked
+  language: script
+  pass_filenames: false
+  always_run: true
+  stages: [pre-push]

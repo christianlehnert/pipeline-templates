@@ -1,0 +1,71 @@
+# common-security rules: the gitleaks default rules plus rules for customer data and
+# plain passwords. Used by the pre-commit hook and by common-security.yml (same file).
+title = "common-security"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "iban-ch-li"
+description = "IBAN of Switzerland or Liechtenstein; only valid check digits count, test IBANs go into the manifest"
+regex = '''(?i)\b(?:CH|LI)\d{2}(?: ?[0-9A-Z]{4}){4} ?[0-9A-Z]\b'''
+keywords = ["ch", "li"]
+
+[[rules]]
+id = "iban-sepa"
+description = "IBAN of a frequent SEPA country; only valid check digits count, test IBANs go into the manifest"
+regex = '''(?i)\b(?:DE|AT|FR|IT|ES|NL|BE|LU|PT|IE|FI|SE|DK|NO|PL|CZ)\d{2}(?: ?[0-9A-Z]{4}){3,6}(?: ?[0-9A-Z]{1,4})?\b'''
+keywords = ["de", "at", "fr", "it", "es", "nl", "be", "lu", "pt", "ie", "fi", "se", "dk", "no", "pl", "cz"]
+
+[[rules]]
+id = "party-iso20022"
+description = "Name, address, birth date or contact of a party in an ISO 20022 message"
+regex = '''<(?:\w+:)?(?:Nm|StrtNm|BldgNb|PstCd|TwnNm|AdrLine|BirthDt|EmailAdr|PhneNb|MobNb)>\s*([^<\s][^<]{1,140})</'''
+secretGroup = 1
+keywords = ["<nm>", "strtnm", "pstcd", "twnnm", "adrline", "birthdt", "emailadr", "phnenb", "mobnb", ":nm>"]
+[[rules.allowlists]]
+regexTarget = "secret"
+regexes = ['''^(?:string|xxx+|\$\{.*\}|\{\{.*\}\})$''']
+
+[[rules]]
+id = "party-swift-mt"
+description = "Ordering or beneficiary customer (fields 50 and 59) in a SWIFT MT message"
+regex = '''(?m)^:(?:50[AFKH]?|59[AF]?):([^\r\n]{3,})'''
+secretGroup = 1
+keywords = [":50", ":59"]
+
+[[rules]]
+id = "password-in-config"
+description = "A non-empty password value in a configuration, script or source file"
+regex = '''(?i)(?:^|[\s"'{,;(])["']?([\w.-]*(?:password|passwort|passwd|pwd|kennwort)|(?:client|api|app|db)[_.-]?secret|secret[_.-]?key)["']?\s*[:=]\s*["']?([^\s"'$<>{}][^\s"']{3,200})'''
+secretGroup = 2
+keywords = ["password", "passwort", "passwd", "pwd", "kennwort", "secret"]
+[[rules.allowlists]]
+regexTarget = "secret"
+regexes = ['''^(?i:true|false|null|none|required|optional|changeme-not-set)$''', '''^\*+$''']
+
+[[rules]]
+id = "credentials-in-url"
+description = "User and password in front of the host of a URL"
+regex = '''[a-zA-Z][a-zA-Z0-9+.-]*://[^\s:/@]+:([^\s:/@]+)@[^\s/]+'''
+secretGroup = 1
+keywords = ["://"]
+[[rules.allowlists]]
+regexTarget = "secret"
+regexes = ['''^\$\{?\w+\}?$''']
+
+[[rules]]
+id = "environment-dump"
+description = "Values of a dumped user environment"
+regex = '''(?m)^\s*"?(?:USERNAME|COMPUTERNAME|USERPROFILE|USERDOMAIN|LOGONSERVER|HOMEPATH)"?\s*[:=]\s*"?([^\s"]{2,})'''
+secretGroup = 1
+keywords = ["username", "computername", "userprofile", "userdomain", "logonserver", "homepath"]
+
+[[rules]]
+id = "email-address"
+description = "A personal e-mail address"
+regex = '''\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'''
+keywords = ["@"]
+[[rules.allowlists]]
+regexTarget = "match"
+regexes = ['''@(?:example\.(?:com|org|net)|users\.noreply\.github\.com|localhost)$''', '''^(?:noreply|no-reply|donotreply)@''']

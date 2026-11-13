@@ -1,0 +1,15 @@
+---
+name: security
+
+# This repository runs its own common-security pipeline (from the same commit).
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    name: common-security
+    uses: ./.github/workflows/common-security.yml

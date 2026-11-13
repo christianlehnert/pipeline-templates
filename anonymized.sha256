@@ -1,0 +1,2 @@
+# Accepted values (common-security value manifest): SHA-256 of the normalized value, two blanks, label.
+1a22eda9c43183e7975671d1c9cb638219b00a39a2e5a22009e765afdaf78aef  synthetic test IBAN CH90...TEST used by tests/common-security/run-tests.sh
