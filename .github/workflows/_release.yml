@@ -20,14 +20,16 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
       - name: Move major tag to this release
         env:
           TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # No checkout and no persisted git credentials: the tag is moved through the API.
           major="${TAG%%.*}"
-          git tag --force "$major" "$GITHUB_SHA"
-          git push --force origin "refs/tags/${major}"
+          if gh api "repos/${GITHUB_REPOSITORY}/git/refs/tags/${major}" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${major}" -f sha="$GITHUB_SHA" -F force=true >/dev/null
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" -f ref="refs/tags/${major}" -f sha="$GITHUB_SHA" >/dev/null
+          fi
           echo "Moved ${major} to ${TAG} (${GITHUB_SHA})."
