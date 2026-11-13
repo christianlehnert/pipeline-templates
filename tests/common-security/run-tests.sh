@@ -28,7 +28,8 @@ git add app.properties; expect 1 staged "plain password is blocked"; undo
 echo 'password=${DB_PASSWORD}' > app.properties; git add app.properties; expect 0 staged "password reference passes"; undo
 printf '<Document><Nm>Hans Muster</Nm></Document>\n' > msg.xml # gitleaks:allow
 git add msg.xml; expect 1 staged "party data in a message is blocked"; undo
-printf '<Document><Nm>Qwbz Lkmrt</Nm></Document>\n' > msg.xml; sha256sum msg.xml > anonymized.sha256
+printf '<Document><Nm>Qwbz Lkmrt</Nm></Document>\n' > msg.xml # gitleaks:allow anonymized sample
+sha256sum msg.xml > anonymized.sha256
 git add msg.xml anonymized.sha256; expect 0 staged "anonymized message in the manifest passes"; git commit -qm anon
 printf '<Document><Nm>Hans Muster</Nm></Document>\n' > msg.xml # gitleaks:allow
 git add msg.xml; expect 1 staged "message edited after anonymizing is blocked"; undo

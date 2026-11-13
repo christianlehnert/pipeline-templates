@@ -42,13 +42,13 @@ keywords = [":50", ":59"]
 
 [[rules]]
 id = "password-in-config"
-description = "A non-empty password value in a configuration or script file"
-regex = '''(?i)\b[\w.-]*(?:password|passwort|passwd|pwd|kennwort|secret)[\w.-]*\s*[:=]\s*["']?([^\s"'${}<>][^\s"']{0,200})'''
-secretGroup = 1
+description = "A non-empty password value in a configuration, script or source file"
+regex = '''(?i)(?:^|[\s"'{,;(])["']?([\w.-]*(?:password|passwort|passwd|pwd|kennwort)|(?:client|api|app|db)[_.-]?secret|secret[_.-]?key)["']?\s*[:=]\s*["']?([^\s"'$<>{}][^\s"']{3,200})'''
+secretGroup = 2
 keywords = ["password", "passwort", "passwd", "pwd", "kennwort", "secret"]
 [[rules.allowlists]]
 regexTarget = "secret"
-regexes = ['''^(?:true|false|null|none|required|optional|\*+)$''']
+regexes = ['''^(?i:true|false|null|none|required|optional|changeme-not-set)$''', '''^\*+$''']
 
 [[rules]]
 id = "credentials-in-url"

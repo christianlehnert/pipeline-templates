@@ -1,0 +1,7 @@
+# actionlint 1.7.12 does not know the job.workflow_repository / job.workflow_sha contexts yet
+# (documented by GitHub for reusable workflows). Ignore exactly these two messages here.
+paths:
+  .github/workflows/common-security.yml:
+    ignore:
+      - 'property "workflow_repository" is not defined'
+      - 'property "workflow_sha" is not defined'
