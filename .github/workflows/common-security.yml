@@ -17,8 +17,9 @@ name: common-security
 #   workflows      actionlint and zizmor on .github/workflows
 #   iac            Trivy misconfiguration scan (Terraform, Dockerfile, Kubernetes, ...)
 #   dependencies   dependency review, pull requests only
-#   image          optional: build the image, fail on fixable critical CVEs, keep an SBOM
 #   result         one check name for the ruleset: fails if any job failed
+#
+# The image gate (Trivy, SBOM) runs where the image is built: actions/container-publish.
 #
 # The scan files are checked out from this repository at the commit of this workflow
 # (job.workflow_repository / job.workflow_sha), so caller pin and rules always match.
@@ -26,11 +27,6 @@ name: common-security
 on:
   workflow_call:
     inputs:
-      dockerfile:
-        description: Path of a Dockerfile to build and scan (empty = no image job).
-        type: string
-        required: false
-        default: ""
       fail-on-severity:
         description: Lowest dependency severity that fails a pull request.
         type: string
@@ -182,42 +178,10 @@ jobs:
     with:
       fail-on-severity: ${{ inputs.fail-on-severity }}
 
-  image:
-    name: Image (Trivy gate, SBOM)
-    if: inputs.dockerfile != ''
-    runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: 30
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Build image (not pushed)
-        env:
-          DOCKERFILE: ${{ inputs.dockerfile }}
-        run: docker build -f "$DOCKERFILE" -t common-security/scan:local "$(dirname "$DOCKERFILE")"
-
-      - name: Fail on fixable critical vulnerabilities
-        run: |
-          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" image \
-            --quiet --exit-code 1 --severity CRITICAL --ignore-unfixed common-security/scan:local
-
-      - name: Create SBOM (CycloneDX)
-        run: |
-          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" image \
-            --quiet --format cyclonedx common-security/scan:local > "$RUNNER_TEMP/sbom.cdx.json"
-
-      - name: Keep the SBOM
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: sbom
-          path: ${{ runner.temp }}/sbom.cdx.json
-
   result:
     name: result
     if: always()
-    needs: [secrets, data, workflows, iac, dependencies, image]
+    needs: [secrets, data, workflows, iac, dependencies]
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: 5
     steps:

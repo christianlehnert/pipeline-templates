@@ -1,8 +1,9 @@
 name: container-publish
 description: >-
-  Build a container image with Docker Buildx. With push enabled the image is pushed to
-  GitHub Container Registry and referenced by digest; without push it is loaded into the
-  local Docker engine for testing.
+  Build a container image with Docker Buildx, scan it with Trivy (fails on fixable
+  critical vulnerabilities) and keep a CycloneDX SBOM as artifact. Only a clean image is
+  pushed: with push enabled it goes to GitHub Container Registry and is referenced by
+  digest; without push it stays in the local Docker engine for testing.
 
 inputs:
   app:
@@ -20,6 +21,10 @@ inputs:
     description: Token used to push to ghcr.io. Needs the packages write permission.
     required: false
     default: ${{ github.token }}
+  scan-severity:
+    description: Severities that fail the image scan (only vulnerabilities with a fix).
+    required: false
+    default: CRITICAL
 
 outputs:
   image:
@@ -58,13 +63,42 @@ runs:
         username: ${{ github.actor }}
         password: ${{ inputs.token }}
 
-    - name: Build image
-      id: build
+    - name: Build image (local)
       uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
       with:
         context: ${{ inputs.context }}
-        push: ${{ inputs.push == 'true' }}
-        load: ${{ inputs.push != 'true' }}
+        push: false
+        load: true
+        tags: ${{ steps.name.outputs.repository }}:${{ steps.name.outputs.tag }}
+        labels: |
+          org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          org.opencontainers.image.revision=${{ github.sha }}
+
+    - name: Scan image (Trivy gate)
+      shell: bash
+      env:
+        IMAGE: ${{ steps.name.outputs.repository }}:${{ steps.name.outputs.tag }}
+        SEVERITY: ${{ inputs.scan-severity }}
+        TRIVY: aquasec/trivy@sha256:1c78ed1ef824ab8bb05b04359d186e4c1229d0b3e67005faacb54a7d71974f73 # 0.69.1
+      run: |
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY" image \
+          --quiet --exit-code 1 --severity "$SEVERITY" --ignore-unfixed "$IMAGE"
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY" image \
+          --quiet --format cyclonedx "$IMAGE" > "$RUNNER_TEMP/sbom.cdx.json"
+
+    - name: Keep the SBOM
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: sbom-${{ inputs.app }}
+        path: ${{ runner.temp }}/sbom.cdx.json
+
+    - name: Push image (only after a clean scan)
+      id: build
+      if: inputs.push == 'true'
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      with:
+        context: ${{ inputs.context }}
+        push: true
         tags: ${{ steps.name.outputs.repository }}:${{ steps.name.outputs.tag }}
         labels: |
           org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
