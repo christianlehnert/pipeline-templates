@@ -1,0 +1,232 @@
+---
+name: common-security
+
+# Reusable workflow: the one security pipeline for every repository. Call it on push (all
+# branches) and on pull_request; make the job "common-security / result" a required check.
+#
+#   jobs:
+#     security:
+#       uses: christianlehnert/pipeline-templates/.github/workflows/common-security.yml@<full sha>
+#       permissions:
+#         contents: read
+#
+# Jobs:
+#   secrets        gitleaks over the whole history (secret-scan.yml)
+#   data           customer data and forbidden files in the tracked files, with the same
+#                  script and rules as the pre-commit hook (scripts/, config/)
+#   workflows      actionlint and zizmor on .github/workflows
+#   iac            Trivy misconfiguration scan (Terraform, Dockerfile, Kubernetes, ...)
+#   dependencies   dependency review, pull requests only
+#   image          optional: build the image, fail on fixable critical CVEs, keep an SBOM
+#   result         one check name for the ruleset: fails if any job failed
+#
+# The scan files are checked out from this repository at the commit of this workflow
+# (job.workflow_repository / job.workflow_sha), so caller pin and rules always match.
+
+on:
+  workflow_call:
+    inputs:
+      dockerfile:
+        description: Path of a Dockerfile to build and scan (empty = no image job).
+        type: string
+        required: false
+        default: ""
+      fail-on-severity:
+        description: Lowest dependency severity that fails a pull request.
+        type: string
+        required: false
+        default: high
+      runs-on:
+        description: Runner label.
+        type: string
+        required: false
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+env:
+  GITLEAKS_REPOSITORY: gitleaks/gitleaks
+  GITLEAKS_REF: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e
+  GITLEAKS_VERSION: 8.30.1
+  TRIVY_IMAGE: aquasec/trivy@sha256:1c78ed1ef824ab8bb05b04359d186e4c1229d0b3e67005faacb54a7d71974f73
+  ACTIONLINT_VERSION: v1.7.12
+  ZIZMOR_VERSION: 1.32.0
+
+jobs:
+  secrets:
+    name: Secrets (history)
+    uses: ./.github/workflows/secret-scan.yml
+    with:
+      runs-on: ${{ inputs.runs-on }}
+
+  data:
+    name: Customer data and forbidden files
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: src
+          persist-credentials: false
+
+      - name: Check out common-security at the commit of this workflow
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: common-security
+          persist-credentials: false
+
+      - name: Restore gitleaks binary
+        id: cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/gitleaks-bin
+          key: gitleaks-${{ runner.os }}-${{ runner.arch }}-${{ env.GITLEAKS_REPOSITORY }}-${{ env.GITLEAKS_REF }}-${{ env.GITLEAKS_VERSION }}
+
+      - name: Check out gitleaks source
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.GITLEAKS_REPOSITORY }}
+          ref: ${{ env.GITLEAKS_REF }}
+          path: gitleaks-src
+          persist-credentials: false
+
+      - name: Set up Go
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: gitleaks-src/go.mod
+          cache-dependency-path: gitleaks-src/go.sum
+
+      - name: Build gitleaks
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: gitleaks-src
+        env:
+          OUT: ${{ runner.temp }}/gitleaks-bin
+        run: |
+          mkdir -p "$OUT"
+          CGO_ENABLED=0 go build -trimpath \
+            -ldflags "-s -w -X=github.com/zricethezav/gitleaks/v8/version.Version=${GITLEAKS_VERSION}" \
+            -o "$OUT/gitleaks" .
+
+      - name: Scan tracked files
+        working-directory: src
+        env:
+          GITLEAKS: ${{ runner.temp }}/gitleaks-bin/gitleaks
+        run: |
+          set +e
+          ../common-security/scripts/common-security-scan.sh tracked > "$RUNNER_TEMP/data.txt" 2>&1
+          rc=$?
+          set -e
+          cat "$RUNNER_TEMP/data.txt"
+          {
+            echo "### Customer data and forbidden files"
+            echo '```'
+            cat "$RUNNER_TEMP/data.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+  workflows:
+    name: Workflow files (actionlint, zizmor)
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+
+      - name: Lint workflows
+        run: |
+          if [ ! -d .github/workflows ]; then echo "No workflows."; exit 0; fi
+          go install "github.com/rhysd/actionlint/cmd/actionlint@${ACTIONLINT_VERSION}"
+          python -m pip install --quiet "zizmor==${ZIZMOR_VERSION}"
+          "$(go env GOPATH)/bin/actionlint" -color
+          zizmor --offline --min-severity medium .github/workflows
+
+  iac:
+    name: Infrastructure as code (Trivy)
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Scan for misconfigurations
+        run: |
+          docker run --rm -v "$PWD:/src:ro" "$TRIVY_IMAGE" config \
+            --quiet --exit-code 1 --severity HIGH,CRITICAL /src
+
+  dependencies:
+    name: Dependencies (pull request)
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/dependency-review.yml
+    with:
+      fail-on-severity: ${{ inputs.fail-on-severity }}
+
+  image:
+    name: Image (Trivy gate, SBOM)
+    if: inputs.dockerfile != ''
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build image (not pushed)
+        env:
+          DOCKERFILE: ${{ inputs.dockerfile }}
+        run: docker build -f "$DOCKERFILE" -t common-security/scan:local "$(dirname "$DOCKERFILE")"
+
+      - name: Fail on fixable critical vulnerabilities
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" image \
+            --quiet --exit-code 1 --severity CRITICAL --ignore-unfixed common-security/scan:local
+
+      - name: Create SBOM (CycloneDX)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" image \
+            --quiet --format cyclonedx common-security/scan:local > "$RUNNER_TEMP/sbom.cdx.json"
+
+      - name: Keep the SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: ${{ runner.temp }}/sbom.cdx.json
+
+  result:
+    name: result
+    if: always()
+    needs: [secrets, data, workflows, iac, dependencies, image]
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 5
+    steps:
+      - name: All checks passed
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          echo "$RESULTS"
+          if echo "$RESULTS" | grep -qE '"(failure|cancelled)"'; then
+            echo "::error::common-security failed"
+            exit 1
+          fi
