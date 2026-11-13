@@ -19,6 +19,7 @@ Example applications that use these templates:
 | `.github/workflows/deploy.yml` | Reusable workflow | Deploy one image to one GitHub environment (approval gates apply) |
 | `.github/workflows/codeql.yml` | Reusable workflow | CodeQL code scanning without a build |
 | `.github/workflows/dependency-review.yml` | Reusable workflow | Fail pull requests that add vulnerable dependencies |
+| `.github/workflows/secret-scan.yml` | Reusable workflow | Scan the whole git history for secrets with gitleaks, built from a pinned commit |
 | `actions/container-publish` | Composite action | Build an image with Buildx, push by digest or load locally |
 | `actions/smoke-test` | Composite action | Start an image and wait for its health endpoint to return 200 |
 | `.github/workflows/_selftest.yml` | Workflow | Lints this repository and tests the composite actions |
@@ -166,6 +167,51 @@ Calling job permissions: `contents: read`, `security-events: write`, `actions: r
 
 Calling job permissions: `contents: read`. Call it only for `pull_request` events.
 
+### secret-scan
+
+Scans the whole git history of the calling repository with
+[gitleaks](https://github.com/gitleaks/gitleaks). The job fails when a secret is found;
+values are redacted in the log and the job summary lists rule, file, line, commit and
+fingerprint of each finding.
+
+gitleaks is **built from source** on the runner, from the repository and commit given in
+the inputs. No downloaded binary is trusted, and an organisation can point the template at
+its own fork and decide when to take upstream changes. The binary is cached per commit, so
+only the first run builds it (about one minute).
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `gitleaks-repository` | no | `gitleaks/gitleaks` | Repository to build gitleaks from, for example your fork |
+| `gitleaks-ref` | no | commit of `v8.30.1` | Full 40-character commit SHA to build |
+| `gitleaks-version` | no | `8.30.1` | Version of that commit, used for `minVersion` checks in configs |
+| `runs-on` | no | `ubuntu-latest` | Runner label |
+
+Calling job permissions: `contents: read`.
+
+```yaml
+  secret-scan:
+    uses: christianlehnert/pipeline-templates/.github/workflows/secret-scan.yml@v1
+    permissions:
+      contents: read
+    # with:
+    #   gitleaks-repository: my-org/gitleaks                         # your fork
+    #   gitleaks-ref: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e       # commit to build
+    #   gitleaks-version: 8.30.1                                     # version of that commit
+```
+
+Configuration stays in the application repository and is picked up automatically:
+
+| File | Purpose |
+|---|---|
+| `.gitleaks.toml` | Own rules or allowlists, usually starting with `[extend] useDefault = true` |
+| `.gitleaksignore` | Fingerprints of accepted findings, one per line (copy them from the job summary) |
+
+When the scan finds a real secret, revoke or rotate it first. Removing it from the code
+alone does not help, because the value stays in the git history.
+
+To make the scan mandatory, add the job to the required status checks of the branch
+ruleset on `main`.
+
 ## Versioning
 
 Releases follow [Semantic Versioning](https://semver.org).
@@ -197,6 +243,7 @@ Dependabot proposes updates as pull requests.
 The `selftest` workflow runs on every pull request and on pushes to `main`:
 
 - `actionlint` and `shellcheck` on all workflows and scripts.
+- The `secret-scan` workflow is run from the working tree against this repository.
 - The composite actions are run from the working tree (`uses: ./actions/...`) against
   the fixture image in `tests/fixtures/web`, so changes to them are tested before release.
 

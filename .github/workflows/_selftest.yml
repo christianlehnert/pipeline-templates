@@ -58,3 +58,9 @@ jobs:
         uses: ./actions/smoke-test
         with:
           image: ${{ steps.build.outputs.image }}
+
+  secret-scan:
+    name: Secret scan of this repository
+    uses: ./.github/workflows/secret-scan.yml
+    permissions:
+      contents: read
