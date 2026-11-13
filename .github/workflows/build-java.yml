@@ -73,7 +73,7 @@ jobs:
 
       - name: Build container image
         id: publish
-        uses: christianlehnert/pipeline-templates/actions/container-publish@1691306d5446bbcf69dc263169fbb4068e818e6e # v1.1.0
+        uses: christianlehnert/pipeline-templates/actions/container-publish@e9865bacd47f26e568ab5e62656bca6d4f9303ec # feature/common-security
         with:
           app: ${{ inputs.app }}
           context: ${{ inputs.working-directory }}
